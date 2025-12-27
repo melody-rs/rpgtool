@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v5
     # https://github.com/rust-lang/cargo/issues/7895#issuecomment-2323050826
     - name: Build
-      run: 
+      run: |
         mkdir dist
         OUTPUT="$(cargo build --message-format=json-render-diagnostics --release)"
         ARTIFACTS="$(echo $OUTPUT | jq -sr '[.[] | select(.reason == "compiler-artifact") | select(.executable != null)] | map ( .executable ) []')"
