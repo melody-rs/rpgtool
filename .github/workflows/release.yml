@@ -17,13 +17,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v5
-    # https://github.com/rust-lang/cargo/issues/7895#issuecomment-2323050826
-    - name: Build
-      run: 
+    - name: Build Binaries
+      run: cargo build --profile release
+    - name: Collect Binaries
+      shell: bash
+      run: |
         mkdir dist
-        OUTPUT="$(cargo build --message-format=json-render-diagnostics --release)"
-        ARTIFACTS="$(echo $OUTPUT | jq -sr '[.[] | select(.reason == "compiler-artifact") | select(.executable != null)] | map ( .executable ) []')"
-        for ARTIFACT in $ARTIFACTS; do cp $ARTIFACT dist/; done
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          cp target/release/marshalconv.exe dist/marshalconv_windows.exe
+          cp target/release/rpgtool.exe dist/rpgtool_windows.exe
+        else
+           cp target/release/marshalconv dist/marshalconv_linux
+           cp target/release/rpgtool dist/rpgtool_linux
+        fi
     - name: Release
       uses: softprops/action-gh-release@v2
       if: github.ref_type == 'tag'
