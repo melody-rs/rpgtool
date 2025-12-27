@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ "rework" ]
+  pull_request:
+    branches: [ "rework" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]    
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v5
+    # https://github.com/rust-lang/cargo/issues/7895#issuecomment-2323050826
+    - name: Build
+      run: 
+        mkdir dist
+        OUTPUT="$(cargo build --message-format=json-render-diagnostics --release)"
+        ARTIFACTS="$(echo $OUTPUT | jq -sr '[.[] | select(.reason == "compiler-artifact") | select(.executable != null)] | map ( .executable ) []')"
+        for ARTIFACT in $ARTIFACTS; do cp $ARTIFACT dist/; done
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: rpgtool-${{ matrix.os }}
+        path: dist/
+        
