@@ -29,6 +29,7 @@ pub fn extract(args: StringExtractArgs) {
         extract_format,
         format,
         file_ext,
+        #[cfg(feature = "ruby-prism")]
         scripts_dir,
     } = args;
 
