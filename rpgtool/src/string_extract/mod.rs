@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
 
 use common::Format;
+use indicatif::ProgressStyle;
+use std::io::Write;
 
 use crate::ExtractFormat;
 use crate::GameVer;
@@ -18,22 +20,8 @@ mod rmxp;
 mod scripts;
 use scripts::process_script_text;
 
-fn write_gettext(strings: Vec<GameString>, mut writer: impl std::io::Write) -> std::io::Result<()> {
-    use std::io::Write;
-
-    for string in strings {
-        writeln!(writer, "#: {}", string.location)?;
-        writeln!(writer, "msgid \"{}\"", string.text)?;
-        writeln!(writer, "msgstr \"\"")?;
-        writeln!(writer)?;
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // just barely over the limit
 pub fn extract(args: StringExtractArgs) {
-    use std::io::Write;
-
     let StringExtractArgs {
         src,
         dest,
@@ -63,7 +51,17 @@ pub fn extract(args: StringExtractArgs) {
         }
     };
 
-    let mut strings = Vec::new();
+    #[cfg(feature = "ruby-prism")]
+    let scripts_files = match &scripts_dir {
+        Some(scripts_dir) => match get_script_files(scripts_dir) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("failed to read {}: {e}", scripts_dir.display());
+                return;
+            }
+        },
+        None => vec![],
+    };
 
     let mut entries: Vec<_> = match read_dir.collect() {
         Ok(e) => e,
@@ -74,13 +72,30 @@ pub fn extract(args: StringExtractArgs) {
     };
     entries.sort_by_key(std::fs::DirEntry::path);
 
+    let mut strings = Vec::new();
+
+    let len = entries.len();
+    #[cfg(feature = "ruby-prism")]
+    let len = len + scripts_files.len();
+
+    let pb = indicatif::ProgressBar::new(len as _);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{bar:.cyan/blue}] {pos}/{len} converted",
+        )
+        .expect("should be valid")
+        .progress_chars("#>-"),
+    );
+    pb.enable_steady_tick(std::time::Duration::from_millis(50));
+
     for entry in entries {
+        pb.inc(1);
         let path = entry.path();
         // if not a file *or* the file extension does not match what it should, print warning and continue
         if !entry.file_type().expect("couldn't get file type").is_file()
             || path.extension().is_none_or(|ext| ext != file_ext)
         {
-            println!("[WARN]: Ignoring {}", path.display());
+            pb.println(format!("[WARN]: Ignoring {}", path.display()));
             continue;
         }
 
@@ -91,45 +106,17 @@ pub fn extract(args: StringExtractArgs) {
         match result {
             ProcessResult::Ok => {}
             ProcessResult::Err(e) => {
-                println!("{e}");
+                pb.println(e);
                 break;
             }
             ProcessResult::Unrecognized => {
-                println!("unrecognized file {}", path.display());
-                break;
+                pb.println(format!("unrecognized file {}", path.display()));
             }
         }
     }
 
     #[cfg(feature = "ruby-prism")] // no point in handling this if prism isn't included
-    if let Some(scripts_dir) = scripts_dir {
-        let scripts_txt_path = scripts_dir.join("_scripts.txt");
-        let scripts_txt = match std::fs::read_to_string(&scripts_txt_path) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("failed to read {}: {e}", scripts_txt_path.display());
-                return;
-            }
-        };
-
-        for name in scripts_txt.lines() {
-            let trimmed_name = name.trim();
-            if trimmed_name.is_empty() || trimmed_name.starts_with('#') {
-                continue;
-            }
-
-            let script_path = scripts_dir.join(trimmed_name).with_extension("rb");
-            let script_text = match std::fs::read_to_string(&script_path) {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("failed to read {}: {e}", script_path.display());
-                    continue;
-                }
-            };
-
-            process_script_text(script_text, &mut strings, script_path.display().to_string());
-        }
-    }
+    process_script_files(scripts_files, &mut strings, &pb);
 
     let file = match std::fs::File::create(&dest) {
         Ok(file) => file,
@@ -154,6 +141,40 @@ pub fn extract(args: StringExtractArgs) {
     }
 }
 
+fn get_script_files(scripts_dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+    let scripts_txt_path = scripts_dir.join("_scripts.txt");
+    let scripts_txt = std::fs::read_to_string(&scripts_txt_path)?;
+
+    let scripts = scripts_txt
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        .map(|s| scripts_dir.join(s).with_extension("rb"))
+        .collect();
+
+    Ok(scripts)
+}
+
+#[cfg(feature = "ruby-prism")] // no point in handling this if prism isn't included
+fn process_script_files(
+    script_files: Vec<std::path::PathBuf>,
+    strings: &mut Vec<GameString>,
+    pb: &indicatif::ProgressBar,
+) {
+    for path in script_files {
+        pb.inc(1);
+        let script_text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("failed to read {}: {e}", path.display());
+                pb.abandon();
+                return;
+            }
+        };
+
+        process_script_text(script_text, strings, path.display().to_string());
+    }
+}
+
 enum ProcessResult {
     Ok,
     Err(String),
@@ -172,4 +193,14 @@ where
     let input = std::io::BufReader::new(input);
 
     common::conv_read(format, input).map_err(|e| format!("failed to parse {}: {e}", path.display()))
+}
+
+fn write_gettext(strings: Vec<GameString>, mut writer: impl std::io::Write) -> std::io::Result<()> {
+    for string in strings {
+        writeln!(writer, "#: {}", string.location)?;
+        writeln!(writer, "msgid \"{}\"", string.text)?;
+        writeln!(writer, "msgstr \"\"")?;
+        writeln!(writer)?;
+    }
+    Ok(())
 }

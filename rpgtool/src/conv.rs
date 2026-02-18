@@ -80,7 +80,6 @@ pub fn convert(args: ConvArgs) {
     pb.enable_steady_tick(std::time::Duration::from_millis(50));
 
     let entry_fn = |entry: &std::fs::DirEntry| {
-        pb.inc(1);
         let src_path = entry.path();
         // if not a file *or* the file extension does not match what it should, print warning and continue
         if !entry.file_type().expect("couldn't get file type").is_file()
@@ -100,6 +99,8 @@ pub fn convert(args: ConvArgs) {
                 return None;
             }
         }
+
+        pb.inc(1);
 
         Some(())
     };
