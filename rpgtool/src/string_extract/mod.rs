@@ -134,8 +134,7 @@ pub fn extract(args: StringExtractArgs) {
             }
         }
         ExtractFormat::Gettext => {
-            strings.dedup_by(|a, b| a.text == b.text); // gettext requires dedup'd strings
-            if let Err(e) = write_gettext(strings, file) {
+            if let Err(e) = write_gettext(&strings, file) {
                 eprintln!("failed to write to {}: {e}", dest.display());
             }
         }
@@ -196,12 +195,15 @@ where
     common::conv_read(format, input).map_err(|e| format!("failed to parse {}: {e}", path.display()))
 }
 
-fn write_gettext(strings: Vec<GameString>, mut writer: impl std::io::Write) -> std::io::Result<()> {
+fn write_gettext(strings: &[GameString], mut writer: impl std::io::Write) -> std::io::Result<()> {
+    let mut seen = std::collections::HashSet::new();
     for string in strings {
-        writeln!(writer, "#: {}", string.location)?;
-        writeln!(writer, "msgid \"{}\"", string.text)?;
-        writeln!(writer, "msgstr \"\"")?;
-        writeln!(writer)?;
+        if seen.insert(&string.text) {
+            writeln!(writer, "#: {}", string.location)?;
+            writeln!(writer, "msgid \"{}\"", string.text.escape_debug())?;
+            writeln!(writer, "msgstr \"\"")?;
+            writeln!(writer)?;
+        }
     }
     Ok(())
 }
