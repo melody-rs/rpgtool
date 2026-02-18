@@ -1,9 +1,8 @@
-use clap::{CommandFactory, error::ErrorKind};
 use common::Format;
 use indicatif::ProgressStyle;
 use rayon::prelude::*;
 
-use super::{Cli, ConvArgs};
+use super::ConvArgs;
 
 pub fn convert(args: ConvArgs) {
     let ConvArgs {
@@ -31,14 +30,7 @@ pub fn convert(args: ConvArgs) {
             let maybe_from = input_file_ext.as_deref().and_then(Format::guess_from_ext);
             let maybe_to = output_file_ext.as_deref().and_then(Format::guess_from_ext);
             let Some((from, to)) = maybe_from.zip(maybe_to) else {
-                // we couldn't guess the format, so error out and exit
-                let mut command = Cli::command();
-                command
-                    .error(
-                        ErrorKind::DisplayHelp,
-                        "unable to determine conversion formats, please specify with --format",
-                    )
-                    .exit()
+                crate::no_format_error().exit()
             };
             [from, to]
         }

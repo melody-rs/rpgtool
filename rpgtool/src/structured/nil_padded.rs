@@ -1,7 +1,7 @@
 use alox_48::SerializeArray;
 use serde::{de::Error as _, ser::SerializeSeq};
 
-pub struct NilPadded<T>(Vec<T>);
+pub struct NilPadded<T>(pub Vec<T>);
 
 impl<T> serde::Serialize for NilPadded<T>
 where

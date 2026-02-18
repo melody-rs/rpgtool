@@ -27,3 +27,9 @@ bytemuck = { version = "1.24.0", features = ["derive", "extern_crate_alloc"] }
 num_enum = "0.7.0"
 
 rayon = "1.11.0"
+
+ruby-prism = { version = "1.9.0", optional = true } # Heavy dependency, may not be desired
+
+[features]
+default = ["ruby-prism"]
+prism = []

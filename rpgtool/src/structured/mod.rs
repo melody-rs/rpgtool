@@ -1,9 +1,7 @@
 #![allow(
-    dead_code,
     clippy::struct_field_names,
     clippy::struct_excessive_bools,
-    clippy::cast_possible_truncation,
-    unused_imports
+    clippy::cast_possible_truncation
 )]
 
 mod nil_padded;
@@ -17,13 +15,11 @@ pub use shared::*;
 
 pub mod rmxp;
 
-use crate::{Cli, ConvArgs, GameVer, StructuredArgs};
+use crate::{GameVer, StructuredArgs};
 
-use clap::{CommandFactory, error::ErrorKind};
 use common::Format;
 use indicatif::ProgressStyle;
 use rayon::prelude::*;
-use std::path::PathBuf;
 
 macro_rules! fail {
     ($pb:expr, $fail_on_error:expr) => {
@@ -62,14 +58,7 @@ pub fn convert(args: StructuredArgs) {
             let maybe_from = input_file_ext.as_deref().and_then(Format::guess_from_ext);
             let maybe_to = output_file_ext.as_deref().and_then(Format::guess_from_ext);
             let Some((from, to)) = maybe_from.zip(maybe_to) else {
-                // we couldn't guess the format, so error out and exit
-                let mut command = Cli::command();
-                command
-                    .error(
-                        ErrorKind::DisplayHelp,
-                        "unable to determine conversion formats, please specify with --format",
-                    )
-                    .exit()
+                crate::no_format_error().exit()
             };
             [from, to]
         }

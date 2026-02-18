@@ -21,6 +21,15 @@ pub enum ParameterType {
     None,
 }
 
+impl ParameterType {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(str) => Some(str),
+            _ => None,
+        }
+    }
+}
+
 impl TryFrom<alox_48::Value> for ParameterType {
     type Error = alox_48::DeError;
 

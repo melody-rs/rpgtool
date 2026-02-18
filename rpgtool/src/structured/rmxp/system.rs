@@ -71,6 +71,8 @@ pub struct Words {
     pub equip: String,
 }
 
+#[allow(dead_code)]
+// TODO ???
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
 #[derive(alox_48::Deserialize, alox_48::Serialize)]
 #[marshal(class = "RPG::System::TestBattler")]
